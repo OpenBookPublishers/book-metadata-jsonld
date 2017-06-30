@@ -1,0 +1,133 @@
+#!/usr/bin/env python
+"""
+usage: book-jsonld [-f] [-o path] metadata.xlsx
+
+Read a book metadata spreadsheet and produce JSON-LD scripts with their
+associated data in http://schema.org/Book format.
+
+One file, containing all different formats of the book (e.g., paperback,
+hardback), is genertated per book.
+
+(c) Javier Arias, Open Book Publishers, June 2017
+Use of this software is governed by the terms of the GPLv3 -- see LICENSE
+
+Options:
+  -f, --force       Overwrite existing scripts (if any). Defaults to false
+  -o, --output-dir  Specify a directory to output the scripts. Defaults to
+                    a directory called "scripts" within the path of this script
+
+Dependencies:
+  xlrd==1.0.0
+"""
+
+import os
+import xlrd
+import errno
+import optparse
+from book import *
+from config import *
+from datetime import datetime
+
+def create_dir(directory):
+    try:
+      os.makedirs(directory)
+    except OSError as exception:
+      if exception.errno != errno.EEXIST:
+          raise
+
+def relevant_rows(ws):
+    # we asume the first row contains the headers;
+    # we ignore it and start at row 2
+    for y in xrange(2, ws.nrows):
+      if ws.row(y)[PDOI_COL].ctype != 0:
+          yield ws.row(y)
+
+def get_ws_from_wb(filename, sheet):
+    wb = xlrd.open_workbook(filename)
+    return wb.sheet_by_name(sheet)
+
+def get_value(row, col):
+    return row[col].value
+
+def row_to_title(row):
+    title = get_value(row, TITLE_COL)
+    stitle = get_value(row, SUBT_COL)
+    if stitle:
+        title += ": " + unicode(stitle)
+    return title
+
+def row_to_doi(row):
+    prefix = str(get_value(row, PDOI_COL))
+    suffix = get_value(row, SDOI_COL)
+    doi = prefix + "/" + suffix
+    assert prefix
+    assert suffix
+    return doi
+
+def row_to_pubdate(row):
+    xldate = get_value(row, PDATE_COL)
+    if xldate:
+        t = xlrd.xldate_as_tuple(xldate, DATEMODE)
+        strdate = str(t[0]) + str(t[1]) + str(t[2])
+        date = datetime.strptime(strdate, '%Y%m%d')
+        return date.strftime('%Y-%m-%d')
+    else:
+        return None
+
+def row_to_book(row):
+    title = unicode(row_to_title(row))
+    isbn = int(get_value(row, ISBN_COL))
+    doi = row_to_doi(row)
+    desc = unicode(get_value(row, DESC_COL))
+    url = get_value(row, URL_COL)
+    keyw = unicode(get_value(row, KEYW_COL))
+    cover = get_value(row, COVER_COL)
+    genre = unicode(get_value(row, GENRE_COL))
+    lang = get_value(row, LANG_COL)
+    pages = get_value(row, PAGE_COL)
+    pubdate = row_to_pubdate(row)
+    readurl = get_value(row, READ_COL)
+
+    return Book(title, isbn, doi, desc, url, keyw, cover, genre,
+                lang, pages, pubdate)
+
+def save_script(jsonld, scriptname):
+    script = open(scriptname, 'w')
+    script.write(jsonld)
+    script.close()
+
+def generate_metadata(filename, outdir, force):
+    ws = get_ws_from_wb(filename, WORKSHEET)
+    create_dir(outdir)
+
+    for row in relevant_rows(ws):
+        book = row_to_book(row)
+
+        # we don't want slashes in the filename
+        rdoi = book.doi.replace("/", "-")
+        scriptname = outdir + "/" + rdoi + ".json"
+        if os.path.isfile(scriptname) and not force:
+            continue
+
+        output = book.to_json_ld()
+        assert output
+        save_script(output.encode('utf-8'), scriptname)
+
+def run():
+    p = optparse.OptionParser()
+    p.add_option("-f", "--force", dest="force", action="store_true",
+               default=False, help="Override existing files")
+    p.add_option("-o", "--output-dir", dest="outdir",
+               default=os.path.dirname(os.path.realpath(__file__))+"/scripts",
+               help="If blank ./scripts/ will be used")
+
+    options, arg = p.parse_args()
+    filename = arg[0]
+    assert isinstance(options.force, (bool))
+    assert options.outdir
+    assert filename
+
+    generate_metadata(filename, options.outdir, options.force)
+
+if __name__ == '__main__':
+    run()
