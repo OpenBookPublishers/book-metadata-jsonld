@@ -1,5 +1,5 @@
 """
-This file contains the definition of a self.needed to produce JSON-LD
+This file contains the definition of a book needed to produce JSON-LD
 scripts following the http://schema.org/Book format.
 
 (c) Javier Arias, Open Book Publishers, June 2017
@@ -15,6 +15,14 @@ class Contributor(object):
         self.name = name
         self.surname = surname
         self.role = role
+
+class Publisher(object):
+    def __init__(self, name, shortname, url, logo, description):
+        self.name = name
+        self.shortname = shortname
+        self.url = url
+        self.logo = logo
+        self.description = description
 
 class Book(object):
     def __init__(self, title, isbn, doi, desc, url, keyw, cover, genre, lang, pages, pubdate):
@@ -42,6 +50,9 @@ class Book(object):
         assert fmt not in self.formats
         self.formats[fmt] = isbn
 
+    def add_publisher(self, name, shortname, url, logo, description):
+        self.publisher = Publisher(name, shortname, url, logo, description)
+
     def to_json_ld(self):
         output = """{
         "@context": "http://schema.org",
@@ -52,8 +63,18 @@ class Book(object):
         "image": "%s",
         "genre": "%s",
         "keywords": "%s",
-        "inLangugage": "%s",""" % (self.title, self.isbn, self.url, self.cover,
-                                   self.genre, self.keyw, self.lang)
+        "inLangugage": "%s",
+        "publisher": {
+            "@type": "Organization",
+            "name": "%s",
+            "alternateName": "%s",
+            "url": "%s",
+            "logo": "%s",
+            "description": "%s"
+        },""" % (self.title, self.isbn, self.url, self.cover, self.genre,
+                 self.keyw, self.lang, self.publisher.name,
+                 self.publisher.shortname, self.publisher.url,
+                 self.publisher.logo, self.publisher.description)
 
         if self.pages:
             output += """

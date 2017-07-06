@@ -88,8 +88,11 @@ def row_to_book(row):
     pubdate = row_to_pubdate(row)
     readurl = get_value(row, READ_COL)
 
-    return Book(title, isbn, doi, desc, url, keyw, cover, genre,
+    book = Book(title, isbn, doi, desc, url, keyw, cover, genre,
                 lang, pages, pubdate)
+
+    book.add_publisher(PUB_NAME, PUB_SNAME, PUB_URL, PUB_LOGO, PUB_DESC)
+    return book
 
 def save_script(jsonld, scriptname):
     script = open(scriptname, 'w')
